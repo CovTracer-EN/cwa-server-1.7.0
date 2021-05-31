@@ -1,0 +1,6 @@
+---
+spring:
+  datasource:
+    url: jdbc:postgresql://${POSTGRESQL_SERVICE_HOST}:${POSTGRESQL_SERVICE_PORT}/${POSTGRESQL_DATABASE}
+    username: ${POSTGRESQL_USER_SUBMISION}
+    password: ${POSTGRESQL_PASSWORD_SUBMISION}

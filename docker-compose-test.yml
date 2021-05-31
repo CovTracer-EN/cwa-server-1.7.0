@@ -1,0 +1,221 @@
+version: '3'
+services:
+  submission:
+    build:
+      context: ./
+      dockerfile: ./services/submission/Dockerfile
+    ports:
+      - "8100:8080"
+      - "8106:8081"
+    env_file:
+      - ./.test
+    environment:
+      SPRING_PROFILES_ACTIVE: dev,disable-ssl-server,disable-ssl-client-postgres,disable-ssl-client-verification,disable-ssl-client-verification-verify-hostname
+      POSTGRESQL_SERVICE_PORT: ${POSTGRES_PORT}
+      POSTGRESQL_SERVICE_HOST: ${POSTGRES_HOST}
+      POSTGRESQL_DATABASE: ${POSTGRES_DB}
+      POSTGRESQL_PASSWORD_SUBMISION: ${POSTGRES_SUBMISSION_PASSWORD}
+      POSTGRESQL_USER_SUBMISION: ${POSTGRES_SUBMISSION_USER}
+      POSTGRESQL_PASSWORD_FLYWAY: ${POSTGRES_FLYWAY_PASSWORD}
+      POSTGRESQL_USER_FLYWAY: ${POSTGRES_FLYWAY_USER}
+      SUPPORTED_COUNTRIES: CY, AT, BE, BG, CZ, DE, DK, EE, ES, FI, FR, GB, GR, HU, HR, IE, IT, LT, LU, LV, MT, NL, PL, PT, RO, SE, SI, SK
+      ORIGIN_COUNTRY: CY
+      OTP_URL: ${URL_OTP}
+      OTP_TOKEN: ${TOKEN_OTP}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1000M
+        reservations:
+          memory: 20M
+  distribution:
+    build:
+      context: ./
+      dockerfile: ./services/distribution/Dockerfile
+    depends_on:
+      - objectstore
+      - create-bucket
+    env_file:
+      - ./.test
+    environment:
+      SPRING_PROFILES_ACTIVE: dev,disable-ssl-client-postgres,demo
+      POSTGRESQL_SERVICE_PORT: ${POSTGRES_PORT}
+      POSTGRESQL_SERVICE_HOST: ${POSTGRES_HOST}
+      POSTGRESQL_DATABASE: ${POSTGRES_DB}
+      POSTGRESQL_PASSWORD_DISTRIBUTION: ${POSTGRES_DISTRIBUTION_PASSWORD}
+      POSTGRESQL_USER_DISTRIBUTION: ${POSTGRES_DISTRIBUTION_USER}
+      POSTGRESQL_PASSWORD_FLYWAY: ${POSTGRES_FLYWAY_PASSWORD}
+      POSTGRESQL_USER_FLYWAY: ${POSTGRES_FLYWAY_USER}
+      # Settings for the S3 compatible objectstore
+      CWA_OBJECTSTORE_ACCESSKEY: ${OBJECTSTORE_ACCESSKEY}
+      CWA_OBJECTSTORE_SECRETKEY: ${OBJECTSTORE_SECRETKEY}
+      CWA_OBJECTSTORE_ENDPOINT: http://objectstore
+      CWA_OBJECTSTORE_BUCKET: cwa
+      CWA_OBJECTSTORE_PORT: 8000
+      services.distribution.paths.output: /tmp/distribution
+      # Settings for cryptographic artifacts
+      VAULT_FILESIGNING_SECRET: ${SECRET_PRIVATE}
+      FORCE_UPDATE_KEYFILES: 'false'
+      SUPPORTED_COUNTRIES: CY, AT, BE, BG, CZ, DE, DK, EE, ES, FI, FR, GB, GR, HU, HR, IE, IT, LT, LU, LV, MT, NL, PL, PT, RO, SE, SI, SK
+      ORIGIN_COUNTRY: CY
+    volumes:
+      - ./docker-compose-test-secrets:/secrets
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 4000M
+        reservations:
+          memory: 20M
+  download:
+    build:
+      context: ./
+      dockerfile: ./services/download/Dockerfile
+    ports:
+      - "8111:8080"
+    env_file:
+      - ./.test
+    environment:
+      SPRING_PROFILES_ACTIVE: dev,disable-ssl-server,disable-ssl-client-postgres,disable-ssl-client-verification,disable-ssl-client-verification-verify-hostname
+      POSTGRESQL_SERVICE_PORT: ${POSTGRES_PORT}
+      POSTGRESQL_SERVICE_HOST: ${POSTGRES_HOST}
+      POSTGRESQL_DATABASE: ${POSTGRES_DB}
+      POSTGRESQL_PASSWORD_CALLBACK: ${POSTGRES_CALLBACK_PASSWORD}
+      POSTGRESQL_USER_CALLBACK: ${POSTGRES_CALLBACK_USER}
+      POSTGRESQL_PASSWORD_FLYWAY: ${POSTGRES_FLYWAY_PASSWORD}
+      POSTGRESQL_USER_FLYWAY: ${POSTGRES_FLYWAY_USER}
+      FEDERATION_GATEWAY_BASE_URL: ${EFGS_URL}
+      FEDERATION_GATEWAY_KEYSTORE_PATH: ${PUB12}
+      FEDERATION_GATEWAY_KEYSTORE_PASS: ${PUB12KEY}
+      FEDERATION_CERTIFICATE_DN: ${DN_CERTIFICATE_FEDERATION}
+      FEDERATION_CERTIFICATE_SHA: ${SHA_CERTIFICATE_FEDERATION}
+    volumes:
+      - ./docker-compose-test-secrets:/secrets
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1000M
+        reservations:
+          memory: 20M
+  upload:
+    build:
+      context: ./
+      dockerfile: ./services/upload/Dockerfile
+    ports:
+      - "8112:8080"
+    env_file:
+      - ./.test
+    environment:
+      SPRING_PROFILES_ACTIVE: dev,disable-ssl-client-postgres
+      POSTGRESQL_SERVICE_PORT: ${POSTGRES_PORT}
+      POSTGRESQL_SERVICE_HOST: ${POSTGRES_HOST}
+      POSTGRESQL_DATABASE: ${POSTGRES_DB}
+      POSTGRESQL_PASSWORD_CALLBACK: ${POSTGRES_CALLBACK_PASSWORD}
+      POSTGRESQL_USER_CALLBACK: ${POSTGRES_CALLBACK_USER}
+      POSTGRESQL_PASSWORD_FLYWAY: ${POSTGRES_FLYWAY_PASSWORD}
+      POSTGRESQL_USER_FLYWAY: ${POSTGRES_FLYWAY_USER}
+      FEDERATION_GATEWAY_BASE_URL: ${EFGS_URL}
+      FEDERATION_GATEWAY_KEYSTORE_PATH: ${PUB12}
+      FEDERATION_GATEWAY_KEYSTORE_PASS: ${PUB12KEY}
+      FEDERATION_CERTIFICATE_DN: ${DN_CERTIFICATE_FEDERATION}
+      FEDERATION_CERTIFICATE_SHA: ${SHA_CERTIFICATE_FEDERATION}
+      VAULT_EFGS_BATCHIGNING_SECRET: ${PRIV}
+      VAULT_EFGS_BATCHIGNING_CERTIFICATE: ${PUB}
+      VAULT_EFGS_BATCHSIGNING_PASSWORD: ${PASSWORD_BATCHSIGNING_EFGS_VAULT}
+    volumes:
+      - ./docker-compose-test-secrets:/secrets
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1000M
+        reservations:
+          memory: 20M
+  objectstore:
+    image: "zenko/cloudserver"
+    volumes:
+      - objectstore_volume:/data
+    ports:
+      - "8103:8000"
+    env_file:
+      - ./.test
+    environment:
+      ENDPOINT: objectstore
+      REMOTE_MANAGEMENT_DISABLE: 1
+      SCALITY_ACCESS_KEY_ID: ${OBJECTSTORE_ACCESSKEY}
+      SCALITY_SECRET_ACCESS_KEY: ${OBJECTSTORE_SECRETKEY}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1000M
+        reservations:
+          memory: 20M
+  create-bucket:
+    image: amazon/aws-cli
+    env_file:
+      - ./.test
+    environment:
+      - AWS_ACCESS_KEY_ID=${OBJECTSTORE_ACCESSKEY}
+      - AWS_SECRET_ACCESS_KEY=${OBJECTSTORE_SECRETKEY}
+    entrypoint: ["/root/scripts/wait-for-it/wait-for-it.sh", "objectstore:8000", "-t", "30", "--"]
+    volumes:
+      - ./scripts/wait-for-it:/root/scripts/wait-for-it
+    command: aws s3api create-bucket --bucket cwa --endpoint-url http://objectstore:8000 --acl public-read
+    depends_on:
+      - objectstore
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1000M
+        reservations:
+          memory: 20M
+  otp-server:
+    build: ./otp-server
+    image: server:latest
+    env_file:
+      - ./otp-server/.test
+    restart: always
+    command: node dist/server.js
+    ports:
+      - "9007:9007"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "500k"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1000M
+        reservations:
+          memory: 20M
+volumes:
+  objectstore_volume:
